@@ -2,7 +2,7 @@
 
 **Captura Dual de Áudio para Transcrição por IA**
 
-PipeRec é um aplicativo leve para Linux que grava simultaneamente o microfone e o áudio do sistema (loopback), otimizado para transcrição por modelos de IA como Whisper.
+PipeRec é um aplicativo leve para Linux que grava simultaneamente o microfone e o áudio do sistema (via PulseAudio Monitor), otimizado para transcrição por modelos de IA como Whisper.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -10,14 +10,11 @@ PipeRec é um aplicativo leve para Linux que grava simultaneamente o microfone e
 
 ## ✨ Features
 
-- **Captura Dual**: Grava mic (canal L) e sistema (canal R) simultaneamente
-- **Baixo Consumo**: Otimizado para notebooks antigos com buffers grandes
-- **Qualidade IA**: Normalização LUFS automática para melhor transcrição
-- **Interface Moderna**: GUI com CustomTkinter e tema dark cyberpunk
-- **VU Meters**: Monitoramento de níveis em tempo real
-- **Global Hotkeys**: `Ctrl+Shift+R` para gravar, `Ctrl+Shift+M` para marker
-- **Silent Gate**: Remove silêncio/ruído de fundo do microfone
-- **Sistema de Markers**: Timestamps para facilitar revisão
+- **Captura Dual**: Grava mic (canal L) e sistema (canal R) simultaneamente.
+- **Otimizado para IA**: Normalização LUFS automática para melhor precisão na transcrição.
+- **Interface Profissional**: GUI estável e responsiva construída com Tkinter.
+- **VU Meters**: Monitoramento visual dos níveis de áudio em tempo real.
+- **MP3 Otimizado**: Saída direta em MP3 192kbps, 44.1kHz.
 
 ## 🚀 Instalação
 
@@ -25,14 +22,14 @@ PipeRec é um aplicativo leve para Linux que grava simultaneamente o microfone e
 
 ```bash
 # Ubuntu/Pop!_OS/Debian
-sudo apt install python3-pip python3-tk ffmpeg libportaudio2 portaudio19-dev \
-gir1.2-ayatanaappindicator3-0.1 gir1.2-appindicator3-0.1
+sudo apt install python3-pip python3-tk ffmpeg pulseaudio-utils
 ```
+
+*Nota: O `pulseaudio-utils` é necessário para o comando `parec`.*
 
 ### Dependências Python
 
 ```bash
-cd piperec
 pip3 install -r requirements.txt --user --break-system-packages
 ```
 
@@ -44,21 +41,13 @@ pip3 install -r requirements.txt --user --break-system-packages
 python3 main.py
 ```
 
-### Atalhos de Teclado Globais
-
-| Atalho | Ação |
-|--------|------|
-| `Ctrl+Shift+R` | Iniciar/Parar gravação |
-| `Ctrl+Shift+M` | Adicionar marker (durante gravação) |
-
 ### Fluxo de Trabalho
 
-1. Selecione seu microfone no dropdown
-2. Selecione o monitor de sistema (loopback)
-3. Clique em **REC** ou pressione `Ctrl+Shift+R`
-4. Adicione markers com o botão 📍 ou `Ctrl+Shift+M`
-5. Clique em **STOP** para finalizar
-6. O arquivo MP3 normalizado será salvo em `recordings/`
+1. **Selecione os Dispositivos**: Escolha seu microfone e o monitor do sistema (loopback) nos menus.
+2. **Monitoramento**: Verifique os VU Meters para garantir que o áudio está chegando.
+3. **Gravar**: Clique em **REC** para iniciar (o timer começará a contar).
+4. **Parar**: Clique em **STOP** para finalizar.
+5. **Resultado**: O arquivo processado será salvo automaticamente na pasta `recordings/`.
 
 ## 📁 Estrutura do Projeto
 
@@ -68,72 +57,42 @@ piperec/
 ├── requirements.txt         # Dependências Python
 ├── src/
 │   ├── audio/
-│   │   ├── capture.py       # Motor de captura dual
-│   │   ├── devices.py       # Detecção de dispositivos
-│   │   └── processor.py     # FFmpeg wrapper
+│   │   ├── capture.py       # Motor de captura (parec wrapper)
+│   │   ├── devices.py       # Detecção de dispositivos PulseAudio
+│   │   └── processor.py     # Processamento FFmpeg (Merge/LUFS/MP3)
 │   ├── gui/
-│   │   ├── app.py           # Janela principal
-│   │   ├── components.py    # VU Meter, botões
-│   │   └── theme.py         # Cores e estilos
+│   │   ├── app.py           # Janela principal (Tkinter)
+│   │   ├── components.py    # Widgets customizados (VU Meter, Timer)
+│   │   └── theme.py         # Constantes de estilo
 │   └── utils/
-│       ├── config.py        # Configurações
-│       └── hotkeys.py       # Atalhos globais
-├── recordings/              # Arquivos de saída
-└── temp/                    # Arquivos temporários
+│       └── config.py        # Configurações do usuário
+├── recordings/              # Arquivos de saída final
+└── temp/                    # Arquivos temporários (wavs brutos)
 ```
 
 ## 🔧 Configuração
 
-As configurações são salvas automaticamente em `~/.config/piperec/config.json`:
+As configurações (como últimos dispositivos usados) são salvas automaticamente em `~/.config/piperec/config.json`.
 
-- Sample rate: 44100 Hz (padrão Whisper)
-- Silent gate threshold: -50 dB
-- Normalização: -16 LUFS
-- Bitrate MP3: 192 kbps
+## 🎯 Por que Canais Separados (L/R)?
 
-## 🎯 Otimizado para IA
+Modelos de transcrição (como Whisper) funcionam melhor quando as vozes não estão sobrepostas.
+- **Canal Esquerdo**: Sua voz (Microfone)
+- **Canal Direito**: Áudio do PC (Reunião/Vídeo)
 
-O áudio de saída é especialmente otimizado para transcrição:
-
-- **Canais separados**: Mic no L, Sistema no R
-- **Normalização LUFS**: Volume consistente (-16 LUFS)
-- **Sample rate**: 44100 Hz (ideal para Whisper)
-- **Formato**: MP3 192kbps (bom balanço qualidade/tamanho)
-
-## 📝 Markers
-
-Os markers são salvos em arquivos `.txt` junto com a gravação:
-
-```
-# PipeRec - Markers
-
-02:15 - Ponto importante
-05:32 - Documento compartilhado
-10:45
-```
+Isso permite separar os locutores (diarização) facilmente no pós-processamento se necessário, ou transcrever o estéreo diretamente com maior clareza.
 
 ## 🐛 Troubleshooting
 
-### "No module named 'tkinter'"
-```bash
-sudo apt install python3-tk
-```
+### "FFmpeg not found"
+Certifique-se de que o ffmpeg está instalado: `sudo apt install ffmpeg`
 
-### "PortAudio library not found"
-```bash
-sudo apt install libportaudio2 portaudio19-dev
-```
-
-### Monitor não detectado
-Verifique se o PipeWire está rodando:
-```bash
-pactl list sources short
-```
+### Nenhum dispositivo listado
+Verifique se o PulseAudio está rodando. O PipeRec usa comandos nativos do PulseAudio (`pactl`, `parec`).
 
 ## 📄 License
 
 MIT License - Use livremente!
 
 ---
-
-Feito com ❤️ para gravação de reuniões, chamadas, e transcrição por IA.
+Feito com ❤️ por ZarabaDev.
