@@ -240,8 +240,10 @@ class AudioProcessor:
         """
         os.makedirs(output_dir, exist_ok=True)
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_name = f"{filename_prefix}_{timestamp}"
+        timestamp = datetime.now().strftime("%Y%m%d - %H%M")
+        # User requested specific format "yyyymmaa - hhmm" (assuming dd)
+        # We ignore the default "recording" prefix to keep it clean as requested.
+        base_name = f"{timestamp}"
         
         # Step 1: Merge to stereo WAV
         merged_wav = os.path.join(output_dir, f"{base_name}_stereo.wav")
@@ -305,6 +307,68 @@ class AudioProcessor:
         except Exception as e:
             print(f"Error cleaning directory {dir_path}: {e}")
 
+    def process_for_transcription(
+        self,
+        mic_wav: str,
+        sys_wav: str,
+        output_dir: str
+    ) -> Optional[str]:
+        """
+        Process audio specifically for Groq transcription.
+        
+        Applies:
+        - Stereo isolation (Mic=Left, Sys=Right)
+        - Volume adjustment (Mic=1.5x)
+        - Mixing
+        - Speed up (1.2x)
+        - Silence removal
+        - Downsampling to 16kHz MP3 for small file size
+        
+        Args:
+            mic_wav: Path to mic WAV
+            sys_wav: Path to system WAV
+            output_dir: Output directory
+            
+        Returns:
+            Path to optimized MP3 file or None
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(output_dir, f"transcription_{timestamp}.mp3")
+        
+        # FFmpeg filter complex string
+        # 1. Volume and pan adjustments
+        #    Mic: boost volume, put in left channel only (right = silence)
+        #    Sys: put in right channel only (left = silence)
+        # 2. Mix both stereo streams
+        # 3. Tempo up and silence removal
+        
+        filter_complex = (
+            "[0:a]volume=1.5,pan=stereo|c0=c0|c1=0*c0[mic];"
+            "[1:a]volume=1.0,pan=stereo|c0=0*c0|c1=c0[sys];"
+            "[mic][sys]amix=inputs=2[mix];"
+            "[mix]atempo=1.2,silenceremove=start_periods=1:stop_periods=-1:stop_duration=1:stop_threshold=-50dB[out]"
+        )
+        
+        args = [
+            '-y',
+            '-i', mic_wav,
+            '-i', sys_wav,
+            '-filter_complex', filter_complex,
+            '-map', '[out]',
+            '-ar', '16000',     # 16kHz sample rate
+            '-b:a', '48k',      # 48kbps bitrate
+            output_path
+        ]
+        
+        print(f"⚡ Processing for transcription (Speedup, Silence Remove, Downsample)...")
+        result = self._run_ffmpeg(args)
+        
+        if result.returncode != 0:
+            print(f"FFmpeg processing error: {result.stderr}")
+            return None
+            
+        return output_path
 
 if __name__ == "__main__":
     print("🔧 Testing Audio Processor...")
